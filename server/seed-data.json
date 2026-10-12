@@ -1,0 +1,132 @@
+[
+  {
+    "id": "fancy-letter-swap-forward-anim",
+    "slug": "letter-swap",
+    "payload": {
+      "title": "Letter swap",
+      "description": "A letter-by-letter hover interaction. Each character rolls into its next position, with adjustable direction, timing, and stagger.",
+      "kind": "component",
+      "framework": "React",
+      "category": "Text",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/letter-swap-forward-anim.tsx",
+      "demoUrl": "https://fancycomponents.dev/docs/components/text/letter-swap-forward-anim",
+      "install": "",
+      "tags": [
+        "typography",
+        "interaction",
+        "motion"
+      ],
+      "previewMode": "react",
+      "code": "// MIT License. Copyright (c) 2024 Daniel Petho.\n// Source: https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/letter-swap-forward-anim.tsx\n// Local adaptation: class-name utility and example wrapper.\n\"use client\"\n\nimport { useState } from \"react\"\nimport { AnimationOptions, motion, stagger, useAnimate } from \"motion/react\"\n\ninterface TextProps {\n  label: string\n  reverse?: boolean\n  transition?: AnimationOptions\n  staggerDuration?: number\n  staggerFrom?: \"first\" | \"last\" | \"center\" | number\n  className?: string\n  onClick?: () => void\n}\n\nconst LetterSwapForward = ({\n  label,\n  reverse = true,\n  transition = {\n    type: \"spring\",\n    duration: 0.7,\n  },\n  staggerDuration = 0.03,\n  staggerFrom = \"first\",\n  className,\n  onClick,\n  ...props\n}: TextProps) => {\n  const [scope, animate] = useAnimate()\n  const [blocked, setBlocked] = useState(false)\n\n  const hoverStart = () => {\n    if (blocked) return\n\n    setBlocked(true)\n\n    // Function to merge user transition with stagger and delay\n    const mergeTransition = (baseTransition: AnimationOptions) => ({\n      ...baseTransition,\n      delay: stagger(staggerDuration, {\n        from: staggerFrom,\n      }),\n    })\n\n    animate(\n      \".letter\",\n      { y: reverse ? \"100%\" : \"-100%\" },\n      mergeTransition(transition)\n    ).then(() => {\n      animate(\n        \".letter\",\n        {\n          y: 0,\n        },\n        {\n          duration: 0,\n        }\n      ).then(() => {\n        setBlocked(false)\n      })\n    })\n\n    animate(\n      \".letter-secondary\",\n      {\n        top: \"0%\",\n      },\n      mergeTransition(transition)\n    ).then(() => {\n      animate(\n        \".letter-secondary\",\n        {\n          top: reverse ? \"-100%\" : \"100%\",\n        },\n        {\n          duration: 0,\n        }\n      )\n    })\n  }\n\n  return (\n    <span\n      className={`flex justify-center items-center relative overflow-hidden  ${className} `}\n      onMouseEnter={hoverStart}\n      onClick={onClick}\n      ref={scope}\n      {...props}\n    >\n      <span className=\"sr-only\">{label}</span>\n\n      {label.split(\"\").map((letter: string, i: number) => {\n        return (\n          <span\n            className=\"whitespace-pre relative flex\"\n            key={i}\n            aria-hidden={true}\n          >\n            <motion.span className={`relative letter`} style={{ top: 0 }}>\n              {letter}\n            </motion.span>\n            <motion.span\n              className=\"absolute letter-secondary \"\n              style={{ top: reverse ? \"-100%\" : \"100%\" }}\n            >\n              {letter}\n            </motion.span>\n          </span>\n        )\n      })}\n    </span>\n  )\n}\n\nexport default LetterSwapForward\n\nfunction App(){return <div className=\"demo\"><LetterSwapForward label=\"Make it yours.\" transition={{type:\"tween\",duration:0.35,ease:[0.16,1,0.3,1]}} staggerDuration={0.018}/></div>}",
+      "css": ".demo{font-size:clamp(28px,5vw,52px);letter-spacing:-.035em;text-align:center;font-weight:500;padding:10px}.flex{display:flex}.justify-center{justify-content:center}.items-center{align-items:center}.relative{position:relative}.absolute{position:absolute}.overflow-hidden{overflow:hidden}.whitespace-pre{white-space:pre}.whitespace-pre-wrap{white-space:pre-wrap}.inline-block{display:inline-block}.inline{display:inline}.bg-current{background:currentColor}.w-0{width:0}.left-0{left:0}.right-0{right:0}.tracking-tight{letter-spacing:-.03em}.cursor-pointer{cursor:pointer}.hidden{display:none}.ml-1{margin-left:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}",
+      "js": "",
+      "freeOnly": true,
+      "attribution": "Daniel Petho, Fancy Components. MIT. Community-listed example, not a submission or endorsement by the maintainer."
+    }
+  },
+  {
+    "id": "fancy-scramble-hover",
+    "slug": "scramble-hover",
+    "payload": {
+      "title": "Scramble hover",
+      "description": "A hover-triggered text scramble that resolves back to your original words. Tune the character set, sequence, and reveal direction.",
+      "kind": "component",
+      "framework": "React",
+      "category": "Text",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/scramble-hover.tsx",
+      "demoUrl": "https://fancycomponents.dev/docs/components/text/scramble-hover",
+      "install": "",
+      "tags": [
+        "typography",
+        "interaction",
+        "motion"
+      ],
+      "previewMode": "react",
+      "code": "// MIT License. Copyright (c) 2024 Daniel Petho.\n// Source: https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/scramble-hover.tsx\n// Local adaptation: class-name utility and example wrapper.\n\"use client\"\n\nimport { useEffect, useState } from \"react\"\nimport { motion } from \"motion/react\"\n\nconst cn = (...values: unknown[]) => values.filter(Boolean).join(\" \")\n\ninterface ScrambleHoverProps {\n  text: string\n  scrambleSpeed?: number\n  maxIterations?: number\n  sequential?: boolean\n  revealDirection?: \"start\" | \"end\" | \"center\"\n  useOriginalCharsOnly?: boolean\n  characters?: string\n  className?: string\n  scrambledClassName?: string\n}\n\nconst ScrambleHover: React.FC<ScrambleHoverProps> = ({\n  text,\n  scrambleSpeed = 50,\n  maxIterations = 10,\n  useOriginalCharsOnly = false,\n  characters = \"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_+\",\n  className,\n  scrambledClassName,\n  sequential = false,\n  revealDirection = \"start\",\n  ...props\n}) => {\n  const [displayText, setDisplayText] = useState(text)\n  const [isHovering, setIsHovering] = useState(false)\n  const [isScrambling, setIsScrambling] = useState(false)\n  const [revealedIndices, setRevealedIndices] = useState(new Set<number>())\n\n  useEffect(() => {\n    let interval: NodeJS.Timeout\n    let currentIteration = 0\n\n    const getNextIndex = () => {\n      const textLength = text.length\n      switch (revealDirection) {\n        case \"start\":\n          return revealedIndices.size\n        case \"end\":\n          return textLength - 1 - revealedIndices.size\n        case \"center\":\n          const middle = Math.floor(textLength / 2)\n          const offset = Math.floor(revealedIndices.size / 2)\n          const nextIndex =\n            revealedIndices.size % 2 === 0\n              ? middle + offset\n              : middle - offset - 1\n\n          if (\n            nextIndex >= 0 &&\n            nextIndex < textLength &&\n            !revealedIndices.has(nextIndex)\n          ) {\n            return nextIndex\n          }\n\n          for (let i = 0; i < textLength; i++) {\n            if (!revealedIndices.has(i)) return i\n          }\n          return 0\n        default:\n          return revealedIndices.size\n      }\n    }\n\n    const shuffleText = (text: string) => {\n      if (useOriginalCharsOnly) {\n        const positions = text.split(\"\").map((char, i) => ({\n          char,\n          isSpace: char === \" \",\n          index: i,\n          isRevealed: revealedIndices.has(i),\n        }))\n\n        const nonSpaceChars = positions\n          .filter((p) => !p.isSpace && !p.isRevealed)\n          .map((p) => p.char)\n\n        // Shuffle remaining non-revealed, non-space characters\n        for (let i = nonSpaceChars.length - 1; i > 0; i--) {\n          const j = Math.floor(Math.random() * (i + 1))\n          ;[nonSpaceChars[i], nonSpaceChars[j]] = [\n            nonSpaceChars[j],\n            nonSpaceChars[i],\n          ]\n        }\n\n        let charIndex = 0\n        return positions\n          .map((p) => {\n            if (p.isSpace) return \" \"\n            if (p.isRevealed) return text[p.index]\n            return nonSpaceChars[charIndex++]\n          })\n          .join(\"\")\n      } else {\n        return text\n          .split(\"\")\n          .map((char, i) => {\n            if (char === \" \") return \" \"\n            if (revealedIndices.has(i)) return text[i]\n            return availableChars[\n              Math.floor(Math.random() * availableChars.length)\n            ]\n          })\n          .join(\"\")\n      }\n    }\n\n    const availableChars = useOriginalCharsOnly\n      ? Array.from(new Set(text.split(\"\"))).filter((char) => char !== \" \")\n      : characters.split(\"\")\n\n    if (isHovering) {\n      setIsScrambling(true)\n      interval = setInterval(() => {\n        if (sequential) {\n          if (revealedIndices.size < text.length) {\n            const nextIndex = getNextIndex()\n            revealedIndices.add(nextIndex)\n            setDisplayText(shuffleText(text))\n          } else {\n            clearInterval(interval)\n            setIsScrambling(false)\n          }\n        } else {\n          setDisplayText(shuffleText(text))\n          currentIteration++\n          if (currentIteration >= maxIterations) {\n            clearInterval(interval)\n            setIsScrambling(false)\n            setDisplayText(text)\n          }\n        }\n      }, scrambleSpeed)\n    } else {\n      setDisplayText(text)\n      revealedIndices.clear()\n    }\n\n    return () => {\n      if (interval) clearInterval(interval)\n    }\n  }, [\n    isHovering,\n    text,\n    characters,\n    scrambleSpeed,\n    useOriginalCharsOnly,\n    sequential,\n    revealDirection,\n    maxIterations,\n  ])\n\n  return (\n    <motion.span\n      onHoverStart={() => setIsHovering(true)}\n      onHoverEnd={() => setIsHovering(false)}\n      className={cn(\"inline-block whitespace-pre-wrap\", className)}\n      {...props}\n    >\n      <span className=\"sr-only\">{displayText}</span>\n      <span aria-hidden=\"true\">\n        {displayText.split(\"\").map((char, index) => (\n          <span\n            key={index}\n            className={cn(\n              revealedIndices.has(index) || !isScrambling || !isHovering\n                ? className\n                : scrambledClassName\n            )}\n          >\n            {char}\n          </span>\n        ))}\n      </span>\n    </motion.span>\n  )\n}\n\nexport default ScrambleHover\n\nfunction App(){return <div className=\"demo\"><ScrambleHover text=\"Unexpected.\" maxIterations={6}/></div>}",
+      "css": ".demo{font-size:clamp(28px,5vw,52px);letter-spacing:-.035em;text-align:center;font-weight:500;padding:10px}.flex{display:flex}.justify-center{justify-content:center}.items-center{align-items:center}.relative{position:relative}.absolute{position:absolute}.overflow-hidden{overflow:hidden}.whitespace-pre{white-space:pre}.whitespace-pre-wrap{white-space:pre-wrap}.inline-block{display:inline-block}.inline{display:inline}.bg-current{background:currentColor}.w-0{width:0}.left-0{left:0}.right-0{right:0}.tracking-tight{letter-spacing:-.03em}.cursor-pointer{cursor:pointer}.hidden{display:none}.ml-1{margin-left:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}",
+      "js": "",
+      "freeOnly": true,
+      "attribution": "Daniel Petho, Fancy Components. MIT. Community-listed example, not a submission or endorsement by the maintainer."
+    }
+  },
+  {
+    "id": "fancy-underline-comes-in-goes-out",
+    "slug": "passing-underline",
+    "payload": {
+      "title": "Passing underline",
+      "description": "An underline that travels across a word instead of switching on. A small interaction for links, navigation, and expressive typography.",
+      "kind": "component",
+      "framework": "React",
+      "category": "Text",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/underline-comes-in-goes-out.tsx",
+      "demoUrl": "https://fancycomponents.dev/docs/components/text/underline-comes-in-goes-out",
+      "install": "",
+      "tags": [
+        "typography",
+        "interaction",
+        "motion"
+      ],
+      "previewMode": "react",
+      "code": "// MIT License. Copyright (c) 2024 Daniel Petho.\n// Source: https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/underline-comes-in-goes-out.tsx\n// Local adaptation: class-name utility and example wrapper.\n\"use client\"\n\nimport { ElementType, useEffect, useRef, useState, useMemo } from \"react\"\nconst cn = (...values: unknown[]) => values.filter(Boolean).join(\" \")\nimport {\n  motion,\n  useAnimationControls,\n  ValueAnimationTransition,\n} from \"motion/react\"\n\ninterface ComesInGoesOutUnderlineProps {\n  /**\n   * The content to be displayed and animated\n   */\n  children: React.ReactNode\n\n  /**\n   * HTML Tag to render the component as\n   * @default span\n   */\n  as?: ElementType\n\n  /**\n   * Direction of the animation\n   * @default \"left\"\n   */\n  direction?: \"left\" | \"right\"\n\n  /**\n   * Optional class name for styling\n   */\n  className?: string\n\n  /**\n   * Height of the underline as a ratio of font size\n   * @default 0.1\n   */\n  underlineHeightRatio?: number\n\n  /**\n   * Padding of the underline as a ratio of font size\n   * @default 0.01\n   */\n  underlinePaddingRatio?: number\n\n  /**\n   * Animation transition configuration\n   * @default { duration: 0.4, ease: \"easeInOut\" }\n   */\n  transition?: ValueAnimationTransition\n}\n\nconst ComesInGoesOutUnderline = ({\n  children,\n  as,\n  direction = \"left\",\n  className,\n  underlineHeightRatio = 0.1,\n  underlinePaddingRatio = 0.01,\n  transition = {\n    duration: 0.4,\n    ease: \"easeInOut\",\n  },\n  ...props\n}: ComesInGoesOutUnderlineProps) => {\n  const controls = useAnimationControls()\n  const [blocked, setBlocked] = useState(false)\n  const textRef = useRef<HTMLSpanElement>(null)\n  const MotionComponent = useMemo(() => motion.create(as ?? \"span\"), [as])\n\n  useEffect(() => {\n    const updateUnderlineStyles = () => {\n      if (textRef.current) {\n        const fontSize = parseFloat(getComputedStyle(textRef.current).fontSize)\n        const underlineHeight = fontSize * underlineHeightRatio\n        const underlinePadding = fontSize * underlinePaddingRatio\n        textRef.current.style.setProperty(\n          \"--underline-height\",\n          `${underlineHeight}px`\n        )\n        textRef.current.style.setProperty(\n          \"--underline-padding\",\n          `${underlinePadding}px`\n        )\n      }\n    }\n\n    updateUnderlineStyles()\n    window.addEventListener(\"resize\", updateUnderlineStyles)\n\n    return () => window.removeEventListener(\"resize\", updateUnderlineStyles)\n  }, [underlineHeightRatio, underlinePaddingRatio])\n\n  const animate = async () => {\n    if (blocked) return\n\n    setBlocked(true)\n\n    await controls.start({\n      width: \"100%\",\n      transition,\n      transitionEnd: {\n        left: direction === \"left\" ? \"auto\" : 0,\n        right: direction === \"left\" ? 0 : \"auto\",\n      },\n    })\n\n    await controls.start({\n      width: 0,\n      transition,\n      transitionEnd: {\n        left: direction === \"left\" ? 0 : \"\",\n        right: direction === \"left\" ? \"\" : 0,\n      },\n    })\n\n    setBlocked(false)\n  }\n\n  return (\n    <MotionComponent\n      className={cn(\"relative inline-block cursor-pointer\", className)}\n      onHoverStart={animate}\n      ref={textRef}\n      {...props}\n    >\n      <span>{children}</span>\n      <motion.span\n        className={cn(\"absolute bg-current w-0\", {\n          \"left-0\": direction === \"left\",\n          \"right-0\": direction === \"right\",\n        })}\n        style={{\n          height: \"var(--underline-height)\",\n          bottom: \"calc(1 * var(--underline-padding))\",\n        }}\n        animate={controls}\n        aria-hidden=\"true\"\n      />\n    </MotionComponent>\n  )\n}\n\nComesInGoesOutUnderline.displayName = \"ComesInGoesOutUnderline\"\n\nexport default ComesInGoesOutUnderline\n\nfunction App(){return <div className=\"demo\"><ComesInGoesOutUnderline underlineHeightRatio={0.04}>A little emphasis.</ComesInGoesOutUnderline></div>}",
+      "css": ".demo{font-size:clamp(28px,5vw,52px);letter-spacing:-.035em;text-align:center;font-weight:500;padding:10px}.flex{display:flex}.justify-center{justify-content:center}.items-center{align-items:center}.relative{position:relative}.absolute{position:absolute}.overflow-hidden{overflow:hidden}.whitespace-pre{white-space:pre}.whitespace-pre-wrap{white-space:pre-wrap}.inline-block{display:inline-block}.inline{display:inline}.bg-current{background:currentColor}.w-0{width:0}.left-0{left:0}.right-0{right:0}.tracking-tight{letter-spacing:-.03em}.cursor-pointer{cursor:pointer}.hidden{display:none}.ml-1{margin-left:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}",
+      "js": "",
+      "freeOnly": true,
+      "attribution": "Daniel Petho, Fancy Components. MIT. Community-listed example, not a submission or endorsement by the maintainer."
+    }
+  },
+  {
+    "id": "fancy-typewriter",
+    "slug": "typewriter",
+    "payload": {
+      "title": "Typewriter",
+      "description": "Text that types, pauses, and deletes. Supports multiple phrases, custom cursors, and configurable timing.",
+      "kind": "component",
+      "framework": "React",
+      "category": "Text",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/typewriter.tsx",
+      "demoUrl": "https://fancycomponents.dev/docs/components/text/typewriter",
+      "install": "",
+      "tags": [
+        "typography",
+        "interaction",
+        "motion"
+      ],
+      "previewMode": "react",
+      "code": "// MIT License. Copyright (c) 2024 Daniel Petho.\n// Source: https://github.com/danielpetho/fancy/blob/f9f62c61207b2dd3210476dd98af3c9a5be24094/src/fancy/components/text/typewriter.tsx\n// Local adaptation: class-name utility and example wrapper.\n\"use client\"\n\nimport { ElementType, useEffect, useState } from \"react\"\nimport { motion, Variants } from \"motion/react\"\n\nconst cn = (...values: unknown[]) => values.filter(Boolean).join(\" \")\n\ninterface TypewriterProps {\n  /**\n   * Text or array of texts to type out\n   */\n  text: string | string[]\n\n  /**\n   * HTML Tag to render the component as\n   * @default div\n   */\n  as?: ElementType\n\n  /**\n   * Speed of typing in milliseconds\n   * @default 50\n   */\n  speed?: number\n\n  /**\n   * Initial delay before typing starts\n   * @default 0\n   */\n  initialDelay?: number\n\n  /**\n   * Time to wait between typing and deleting\n   * @default 2000\n   */\n  waitTime?: number\n\n  /**\n   * Speed of deleting characters\n   * @default 30\n   */\n  deleteSpeed?: number\n\n  /**\n   * Whether to loop through texts array\n   * @default true\n   */\n  loop?: boolean\n\n  /**\n   * Optional class name for styling\n   */\n  className?: string\n\n  /**\n   * Whether to show the cursor\n   * @default true\n   */\n  showCursor?: boolean\n\n  /**\n   * Hide cursor while typing\n   * @default false\n   */\n  hideCursorOnType?: boolean\n\n  /**\n   * Character or React node to use as cursor\n   * @default \"|\"\n   */\n  cursorChar?: string | React.ReactNode\n\n  /**\n   * Animation variants for cursor\n   */\n  cursorAnimationVariants?: {\n    initial: Variants[\"initial\"]\n    animate: Variants[\"animate\"]\n  }\n\n  /**\n   * Optional class name for cursor styling\n   */\n  cursorClassName?: string\n}\n\nconst Typewriter = ({\n  text,\n  as: Tag = \"div\",\n  speed = 50,\n  initialDelay = 0,\n  waitTime = 2000,\n  deleteSpeed = 30,\n  loop = true,\n  className,\n  showCursor = true,\n  hideCursorOnType = false,\n  cursorChar = \"|\",\n  cursorClassName = \"ml-1\",\n  cursorAnimationVariants = {\n    initial: { opacity: 0 },\n    animate: {\n      opacity: 1,\n      transition: {\n        duration: 0.01,\n        repeat: Infinity,\n        repeatDelay: 0.4,\n        repeatType: \"reverse\",\n      },\n    },\n  },\n  ...props\n}: TypewriterProps & React.HTMLAttributes<HTMLElement>) => {\n  const [displayText, setDisplayText] = useState(\"\")\n  const [currentIndex, setCurrentIndex] = useState(0)\n  const [isDeleting, setIsDeleting] = useState(false)\n  const [currentTextIndex, setCurrentTextIndex] = useState(0)\n\n  const texts = Array.isArray(text) ? text : [text]\n\n  useEffect(() => {\n    let timeout: NodeJS.Timeout\n\n    const currentText = texts[currentTextIndex]\n\n    const startTyping = () => {\n      if (isDeleting) {\n        if (displayText === \"\") {\n          setIsDeleting(false)\n          if (currentTextIndex === texts.length - 1 && !loop) {\n            return\n          }\n          setCurrentTextIndex((prev) => (prev + 1) % texts.length)\n          setCurrentIndex(0)\n          timeout = setTimeout(() => {}, waitTime)\n        } else {\n          timeout = setTimeout(() => {\n            setDisplayText((prev) => prev.slice(0, -1))\n          }, deleteSpeed)\n        }\n      } else {\n        if (currentIndex < currentText.length) {\n          timeout = setTimeout(() => {\n            setDisplayText((prev) => prev + currentText[currentIndex])\n            setCurrentIndex((prev) => prev + 1)\n          }, speed)\n        } else if (texts.length > 1) {\n          timeout = setTimeout(() => {\n            setIsDeleting(true)\n          }, waitTime)\n        }\n      }\n    }\n\n    // Apply initial delay only at the start\n    if (currentIndex === 0 && !isDeleting && displayText === \"\") {\n      timeout = setTimeout(startTyping, initialDelay)\n    } else {\n      startTyping()\n    }\n\n    return () => clearTimeout(timeout)\n  }, [\n    currentIndex,\n    displayText,\n    isDeleting,\n    speed,\n    deleteSpeed,\n    waitTime,\n    texts,\n    currentTextIndex,\n    loop,\n  ])\n\n  return (\n    <Tag className={cn(\"inline whitespace-pre-wrap tracking-tight\", className)} {...props}>\n      <span>{displayText}</span>\n      {showCursor && (\n        <motion.span\n          variants={cursorAnimationVariants}\n          className={cn(\n            cursorClassName,\n            hideCursorOnType &&\n              (currentIndex < texts[currentTextIndex].length || isDeleting)\n              ? \"hidden\"\n              : \"\"\n          )}\n          initial=\"initial\"\n          animate=\"animate\"\n        >\n          {cursorChar}\n        </motion.span>\n      )}\n    </Tag>\n  )\n}\n\nexport default Typewriter\n\nfunction App(){return <div className=\"demo\"><Typewriter text={[\"Hello, stranger.\",\"Stay a little.\"]} speed={80} waitTime={2400}/></div>}",
+      "css": ".demo{font-size:clamp(28px,5vw,52px);letter-spacing:-.035em;text-align:center;font-weight:500;padding:10px}.flex{display:flex}.justify-center{justify-content:center}.items-center{align-items:center}.relative{position:relative}.absolute{position:absolute}.overflow-hidden{overflow:hidden}.whitespace-pre{white-space:pre}.whitespace-pre-wrap{white-space:pre-wrap}.inline-block{display:inline-block}.inline{display:inline}.bg-current{background:currentColor}.w-0{width:0}.left-0{left:0}.right-0{right:0}.tracking-tight{letter-spacing:-.03em}.cursor-pointer{cursor:pointer}.hidden{display:none}.ml-1{margin-left:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}",
+      "js": "",
+      "freeOnly": true,
+      "attribution": "Daniel Petho, Fancy Components. MIT. Community-listed example, not a submission or endorsement by the maintainer."
+    }
+  },
+  {
+    "id": "fancy-library",
+    "slug": "fancy-components",
+    "payload": {
+      "title": "Fancy Components",
+      "description": "A free, open-source collection of expressive React components and microinteractions by Daniel Petho. Browse the documentation for installation and examples.",
+      "kind": "library",
+      "framework": "React",
+      "category": "Motion",
+      "license": "MIT",
+      "sourceUrl": "https://github.com/danielpetho/fancy",
+      "demoUrl": "https://fancycomponents.dev",
+      "install": "",
+      "tags": [
+        "interaction",
+        "typography",
+        "motion"
+      ],
+      "previewMode": "link",
+      "code": "",
+      "css": "",
+      "js": "",
+      "freeOnly": true,
+      "attribution": "Daniel Petho. Community-listed library, not an endorsement or maintainer-submitted listing."
+    }
+  }
+]
