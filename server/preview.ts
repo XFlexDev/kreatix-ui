@@ -12,6 +12,7 @@ export async function compilePreview(s: Pick<SubmissionInput, 'previewMode' | 'c
   let body = s.code
   let script = s.js
   if (s.previewMode === 'react') {
+    if (!/\b(function\s+App\b|(const|let|var)\s+App\s*=|class\s+App\b)/.test(s.code)) throw new Error('React previews need a component named App, for example: function App() { return <button>Hi</button> }')
     const entry = `${s.code}\nimport {createRoot as __createRoot} from 'react-dom/client';__createRoot(document.getElementById('root')).render(<App/>);`
     const result = await build({
       stdin: { contents: entry, loader: 'tsx', resolveDir: process.cwd(), sourcefile: 'component.tsx' },
@@ -29,5 +30,6 @@ export async function compilePreview(s: Pick<SubmissionInput, 'previewMode' | 'c
     script = result.outputFiles[0].text
     body = '<div id="root"></div>'
   }
-  return `<!doctype html><html lang="en"><head>${header}<style>${style}\n${styleEscape(s.css)}</style></head><body>${body}<script>${scriptEscape(script)}</script></body></html>`
+  const diagnostics = `<script>function reportPreviewError(message){parent.postMessage({type:'kreatix-preview-error',message:String(message).slice(0,300)},'*')}addEventListener('error',event=>reportPreviewError(event.message));addEventListener('unhandledrejection',event=>reportPreviewError(event.reason?.message||event.reason));</script>`
+  return `<!doctype html><html lang="en"><head>${header}${diagnostics}<style>${style}\n${styleEscape(s.css)}</style></head><body>${body}<script>${scriptEscape(script)}</script></body></html>`
 }
