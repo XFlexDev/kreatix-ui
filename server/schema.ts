@@ -9,6 +9,25 @@ export const previewInputSchema = z.object({
   previewMode: z.enum(['html', 'react', 'link']), code: z.string().max(80_000).default(''),
   css: z.string().max(30_000).default(''), js: z.string().max(30_000).default(''),
 }).strict()
+export const draftSchema = z.object({
+  title: z.string().trim().max(80).default(''),
+  description: z.string().trim().max(2000).default(''),
+  kind: z.enum(['component', 'library']),
+  framework: z.enum(frameworks),
+  category: z.enum(categories),
+  license: z.enum(licenses),
+  sourceUrl: z.union([httpsUrl, z.literal('')]).default(''),
+  demoUrl: z.union([httpsUrl, z.literal('')]).default(''),
+  install: z.string().max(300).default(''),
+  tags: z.array(z.string().trim().min(1).max(24)).max(6).default([]),
+  previewMode: z.enum(['html', 'react', 'link']),
+  code: z.string().max(80_000).default(''),
+  css: z.string().max(30_000).default(''),
+  js: z.string().max(30_000).default(''),
+  freeOnly: z.boolean().default(false),
+  attribution: z.string().trim().max(500).default(''),
+}).strict()
+export type DraftInput = z.infer<typeof draftSchema>
 export const submissionSchema = z.object({
   title: z.string().trim().min(3).max(80),
   description: z.string().trim().min(20).max(2000),
@@ -34,5 +53,5 @@ export const submissionSchema = z.object({
 export type SubmissionInput = z.infer<typeof submissionSchema>
 export type Creator = { id: string; username: string; name: string; bio: string; website: string; curated: boolean; joined: string }
 export type User = { id: string; username: string; name: string; role: 'member' | 'admin' }
-export type Submission = SubmissionInput & { id: string; slug: string; status: 'draft' | 'pending' | 'approved' | 'rejected'; reason: string; creator: Creator; createdAt: string; updatedAt: string; saves: number; saved: boolean; curated: boolean; ownerId: string | null }
+export type Submission = DraftInput & { id: string; slug: string; status: 'draft' | 'pending' | 'approved' | 'rejected'; reason: string; creator: Creator; createdAt: string; updatedAt: string; saves: number; saved: boolean; curated: boolean; ownerId: string | null; published?: boolean }
 export type Comment = { id: string; body: string; createdAt: string; author: Creator }

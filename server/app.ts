@@ -6,7 +6,7 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, cre
 import { z } from 'zod'
 import { HTTPException } from 'hono/http-exception'
 import type { DB } from './db'
-import { submissionSchema, previewInputSchema, type SubmissionInput, type User, type Creator, type Submission } from './schema'
+import { submissionSchema, draftSchema, previewInputSchema, type SubmissionInput, type User, type Creator, type Submission } from './schema'
 import { compilePreview } from './preview'
 
 type Env = { Variables: { user: User | null; ip: string } }
@@ -87,7 +87,7 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
     const revision = includeRevision ? revisionFor(row.id) : undefined
     const payload = JSON.parse(revision?.payload ?? row.payload) as SubmissionInput
     const creator = db.prepare('SELECT * FROM creators WHERE id=?').get(row.creator_id) as CreatorRow
-    return { ...payload, id: row.id, slug: row.slug, ownerId: row.owner_id, status: revision?.status ?? row.status, reason: revision?.reason ?? row.reason, creator: publicCreator(creator), createdAt: row.created_at, updatedAt: revision?.created_at ?? row.updated_at, saves: Number(db.prepare('SELECT COUNT(*) AS n FROM saves WHERE submission_id=?').get(row.id)?.n), saved: !!(user && db.prepare('SELECT 1 FROM saves WHERE user_id=? AND submission_id=?').get(user.id, row.id)), curated: !!row.curated }
+    return { ...payload, id: row.id, slug: row.slug, ownerId: row.owner_id, published: row.status === 'approved', status: revision?.status ?? row.status, reason: revision?.reason ?? row.reason, creator: publicCreator(creator), createdAt: row.created_at, updatedAt: revision?.created_at ?? row.updated_at, saves: Number(db.prepare('SELECT COUNT(*) AS n FROM saves WHERE submission_id=?').get(row.id)?.n), saved: !!(user && db.prepare('SELECT 1 FROM saves WHERE user_id=? AND submission_id=?').get(user.id, row.id)), curated: !!row.curated }
   }
   function visible(c: Context<Env>, id: string) {
     const row = rowFor(id)
@@ -332,7 +332,7 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
   app.post('/api/submissions', async c => {
     const user = requireUser(c)
     limit(`draft:${user.id}`, 20, 86400)
-    const data = submissionSchema.parse(await c.req.json())
+    const data = draftSchema.parse(await c.req.json())
     const id = randomUUID()
     const slug = `${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'component'}-${id.slice(0, 8)}`
     db.prepare('INSERT INTO submissions(id,slug,owner_id,creator_id,payload,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').run(id, slug, user.id, user.id, JSON.stringify(data), now(), now())
@@ -340,7 +340,7 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
   })
   app.put('/api/submissions/:id', async c => {
     const row = owned(c, c.req.param('id'))
-    const data = submissionSchema.parse(await c.req.json())
+    const data = draftSchema.parse(await c.req.json())
     if (row.status === 'approved') {
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -355,7 +355,7 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
     const row = owned(c, c.req.param('id'))
     const revision = revisionFor(row.id)
     if (row.status === 'approved' && !revision) fail(409, 'This submission is already published')
-    const data = JSON.parse(revision?.payload ?? row.payload) as SubmissionInput
+    const data = submissionSchema.parse(JSON.parse(revision?.payload ?? row.payload))
     await preview(data)
     if (revision) db.prepare('UPDATE revisions SET status=\'pending\',reason=\'\' WHERE id=?').run(revision.id)
     else db.prepare('UPDATE submissions SET status=\'pending\',reason=\'\',updated_at=? WHERE id=?').run(now(), row.id)

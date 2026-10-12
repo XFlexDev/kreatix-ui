@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+export type FieldIssue = { path: (string | number)[]; message: string }
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message) }
+  constructor(message: string, public status: number, public fields: FieldIssue[] = []) { super(message) }
 }
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -9,7 +10,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { 'Content-Type': 'application/json', 'x-kreatix-ui': '1', ...init.headers },
   })
   const result = await response.json().catch(() => ({ error: 'The server could not be reached. Try again.' }))
-  if (!response.ok) throw new ApiError(result.error || 'Request failed', response.status)
+  if (!response.ok) throw new ApiError(result.error || 'Request failed', response.status, Array.isArray(result.fields) ? result.fields : [])
   return result as T
 }
 export const post = <T>(path: string, body: unknown = {}) => api<T>(path, { method: 'POST', body: JSON.stringify(body) })

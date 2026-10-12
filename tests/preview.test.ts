@@ -12,6 +12,12 @@ test('React and Motion preview compiles', async () => {
   const html = await compilePreview({ previewMode: 'react', code: 'import React from "react"; import {motion} from "motion/react"; function App(){return <motion.button>Example</motion.button>}', css: '', js: '' })
   assert.match(html, /<div id="root">/); assert.match(html, /Example/)
 })
+test('Missing React App produces actionable guidance, and previews report runtime errors', async () => {
+  await assert.rejects(compilePreview({ previewMode: 'react', code: '<button>HTML</button>', css: '', js: '' }), /component named App/)
+  const html = await compilePreview({ previewMode: 'html', code: '<button>Example</button>', css: '', js: 'throw new Error("broken")' })
+  assert.match(html, /kreatix-preview-error/)
+  assert.match(html, /unhandledrejection/)
+})
 test('React preview refuses server, relative, remote, and arbitrary dependency imports', async () => {
   for (const path of ['node:fs', './package.json', '/etc/passwd', 'https://example.com/x.js', 'hono', 'file:///etc/passwd']) await assert.rejects(compilePreview({ previewMode: 'react', code: `import value from ${JSON.stringify(path)}; function App(){return <div>{String(value)}</div>}`, css: '', js: '' }), /supported|allowed/)
 })

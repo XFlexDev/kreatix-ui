@@ -36,12 +36,33 @@ test('Persisted lifecycle, permissions, sessions, and moderated revisions', asyn
       const frame = await request(src.slice(4), 'GET', undefined, owner); assert.equal(frame.status, 200); assert.match(frame.headers.get('content-security-policy')!, /sandbox allow-scripts/)
       assert.equal((await request(src.slice(4), 'GET', undefined, other)).status, 404)
     })
+    await t.test('Incomplete drafts persist privately but cannot be submitted or approved', async () => {
+      const incomplete = { ...payload, title: '', description: '', sourceUrl: '', code: '', freeOnly: false }
+      const created = await request('/submissions', 'POST', incomplete, owner)
+      assert.equal(created.status, 201)
+      const draftId = (await created.json()).item.id
+      assert.equal((await request(`/submissions/${draftId}`)).status, 404)
+      const retrieved = (await (await request(`/submissions/${draftId}`, 'GET', undefined, owner)).json()).item
+      assert.equal(retrieved.title, ''); assert.equal(retrieved.freeOnly, false)
+      const submitted = await request(`/submissions/${draftId}/submit`, 'POST', {}, owner)
+      assert.equal(submitted.status, 400)
+      const fields = (await submitted.json()).fields
+      for (const field of ['title', 'description', 'sourceUrl', 'freeOnly']) assert.ok(fields.some((issue: { path: string[] }) => issue.path[0] === field))
+      assert.equal((await request(`/moderation/${draftId}`, 'POST', { action: 'approve' }, admin)).status, 409)
+      assert.equal((await request(`/submissions/${draftId}`, 'PUT', { ...incomplete, title: 'Work in progress' }, owner)).status, 200)
+      assert.equal((await request('/submissions', 'POST', { ...incomplete, sourceUrl: 'http://github.com/example' }, owner)).status, 400)
+      assert.equal((await request('/submissions', 'POST', { ...incomplete, code: 'x'.repeat(80_001) }, owner)).status, 400)
+    })
     await t.test('Private drafts, ownership, and moderation', async () => {
       const r = await request('/submissions', 'POST', payload, owner); assert.equal(r.status, 201); id = (await r.json()).item.id
       assert.equal((await request(`/submissions/${id}`)).status, 404)
       assert.equal((await request(`/submissions/${id}`, 'PUT', payload, other)).status, 404)
       assert.equal((await request(`/submissions/${id}/submit`, 'POST', {}, other)).status, 404)
       assert.equal((await request(`/moderation/${id}`, 'POST', { action: 'approve' }, other)).status, 403)
+      assert.equal((await request(`/submissions/${id}/submit`, 'POST', {}, owner)).status, 200)
+      const edited = await request(`/submissions/${id}`, 'PUT', payload, owner)
+      assert.equal((await edited.json()).item.status, 'draft')
+      assert.equal((await request(`/moderation/${id}`, 'POST', { action: 'approve' }, admin)).status, 409)
       assert.equal((await request(`/submissions/${id}/submit`, 'POST', {}, owner)).status, 200)
       assert.equal((await request(`/moderation/${id}`, 'POST', { action: 'approve' }, admin)).status, 200)
       assert.equal((await request(`/submissions/${id}`)).status, 200)
@@ -56,6 +77,11 @@ test('Persisted lifecycle, permissions, sessions, and moderated revisions', asyn
       assert.equal((await request(`/creators/${ownerId}/follow`, 'POST', { following: true }, other)).status, 200)
     })
     await t.test('Public version remains unchanged while revisions await review', async () => {
+      const draftRevision = await request(`/submissions/${id}`, 'PUT', { ...payload, description: '', freeOnly: false }, owner)
+      assert.equal(draftRevision.status, 200)
+      assert.equal((await draftRevision.json()).item.published, true)
+      assert.equal((await request(`/submissions/${id}/submit`, 'POST', {}, owner)).status, 400)
+      assert.match(await (await request(`/submissions/${id}/frame`)).text(), /Original version/)
       assert.equal((await request(`/submissions/${id}`, 'PUT', { ...payload, code: '<button>Revised version</button>' }, owner)).status, 200)
       assert.match(await (await request(`/submissions/${id}/frame`)).text(), /Original version/)
       assert.match(await (await request(`/submissions/${id}/frame`, 'GET', undefined, admin)).text(), /Revised version/)
