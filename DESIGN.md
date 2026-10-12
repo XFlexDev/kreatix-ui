@@ -17,6 +17,11 @@ typography:
   form-control:
     fontFamily: "Bricolage, Arial, sans-serif"
     fontSize: "16px"
+  code:
+    fontFamily: "ui-monospace, SFMono-Regular, monospace"
+    fontSize: "14px"
+  preview-serif:
+    fontFamily: "Georgia, serif"
 rounded:
   control: "6px"
   preview: "12px"
@@ -39,7 +44,7 @@ Black is the page background. Near-white carries actions and readable text. Neut
 
 ## Typography
 
-Self-hosted Bricolage Grotesque is the interface face. Use monospace only for actual code and commands. Keep headings compact and task-specific. All inputs, selects, and textareas are at least 16px, including code inputs, so iOS does not zoom on focus.
+Self-hosted Bricolage Grotesque is the interface face. Use monospace only for code and commands; Georgia is reserved for a contrasting submitted text-preview stage, never navigation or forms. Keep headings compact and task-specific. All inputs, selects, and textareas are at least 16px, including code inputs, so iOS does not zoom on focus.
 
 ## Layout
 
