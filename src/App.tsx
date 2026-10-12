@@ -40,7 +40,6 @@ export function App() {
     <Route path="/creators" element={<Creators/>}/><Route path="/creators/:username" element={<CreatorProfile/>}/><Route path="/work/:slug" element={<Detail/>}/>
     <Route path="/login" element={<Auth/>}/><Route path="/join" element={<Auth join/>}/>
     <Route path="/publish" element={<Publish/>}/><Route path="/publish/:id" element={<Publish/>}/><Route path="/workspace" element={<Workspace/>}/><Route path="/settings" element={<Settings/>}/><Route path="/moderation" element={<Moderation/>}/>
-    <Route path="/principles" element={<Empty title="Nothing paid. Ever.">Every listing must be free and open-source. No paid features, promoted rankings, Pro tiers, or paywalled components. Original licenses and creator credit stay intact.</Empty>}/>
     <Route path="*" element={<Empty title="Nothing at this address.">Head back to discovery.</Empty>}/>
   </Routes></main><Footer/></MorphNavigation></SessionProvider></MotionConfig></BrowserRouter>
 }

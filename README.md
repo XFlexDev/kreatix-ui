@@ -8,6 +8,12 @@ Live: https://ui.kreatix.dev
 
 The platform, every feature, and the full advertised functionality of every listing are free and open-source. No Pro tiers, paid promotion, paid dependencies, or paywalled components. Listings require a public source repository and an open-source license, and go through human review before discovery.
 
+## GitHub sign-in
+
+Create a GitHub OAuth App with homepage `https://ui.kreatix.dev` and callback `https://ui.kreatix.dev/api/auth/github/callback`. Device flow is not used. Set server-only `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`; without both, GitHub sign-in is hidden and disabled. Local development uses the configured `APP_ORIGIN` for its callback.
+
+Only `read:user` is requested. OAuth uses PKCE, expiring single-use state bound to an HttpOnly cookie, and the immutable GitHub user ID. Access tokens are not stored. A matching username never automatically links an existing account: sign in normally and use **Settings → Connect GitHub** to link it explicitly. GitHub-only accounts sign in through GitHub rather than a password.
+
 ## First release
 
 - Public discovery, search, filters, libraries, creator profiles, and a feed for new makers.

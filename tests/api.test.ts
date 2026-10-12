@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -69,5 +70,100 @@ test('Persisted lifecycle, permissions, sessions, and moderated revisions', asyn
       assert.equal((await request('/auth/logout', 'POST', {}, owner)).status, 200)
       assert.equal((await (await request('/session', 'GET', undefined, owner)).json()).user, null)
     })
+  } finally { db.close(); rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('GitHub OAuth protects state, identity, account linking, and password login', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'kreatix-github-test-'))
+  const db = openDatabase(dir)
+  let githubId = 12345
+  let login = 'maker'
+  let calls = 0
+  let expectedChallenge = ''
+  const githubFetch: typeof fetch = async (input, init) => {
+    calls++
+    if (String(input) === 'https://github.com/login/oauth/access_token') {
+      const body = new URLSearchParams(init?.body as string)
+      assert.equal(body.get('client_secret'), 'test-secret')
+      assert.equal(body.get('redirect_uri'), 'https://ui.test/api/auth/github/callback')
+      assert.equal(createHash('sha256').update(body.get('code_verifier')!).digest('base64url'), expectedChallenge)
+      return Response.json({ access_token: 'test-token', token_type: 'bearer' })
+    }
+    assert.equal(String(input), 'https://api.github.com/user')
+    assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-token')
+    return Response.json({ id: githubId, login, name: 'GitHub creator' })
+  }
+  const app = createApp(db, { origin: 'https://ui.test', production: true, github: { clientId: 'test-client', clientSecret: 'test-secret', fetch: githubFetch } })
+  const request = (path: string, cookie = '', init: RequestInit = {}) => app.request(`https://ui.test/api${path}`, { ...init, headers: { 'content-type': 'application/json', origin: 'https://ui.test', 'x-kreatix-ui': '1', cookie } })
+  const sessionCookie = (response: Response) => response.headers.getSetCookie().find(value => value.startsWith('__Host-kreatix_ui='))!.split(';')[0]
+  const begin = async (path = '/auth/github', cookie = '') => {
+    const response = await request(path, cookie)
+    assert.equal(response.status, 302)
+    const location = new URL(response.headers.get('location')!)
+    assert.equal(location.origin, 'https://github.com')
+    assert.equal(location.pathname, '/login/oauth/authorize')
+    assert.equal(location.searchParams.get('scope'), 'read:user')
+    assert.equal(location.searchParams.get('code_challenge_method'), 'S256')
+    expectedChallenge = location.searchParams.get('code_challenge')!
+    return { state: location.searchParams.get('state')!, cookie: response.headers.getSetCookie().find(value => value.startsWith('__Host-kreatix_ui_oauth='))!.split(';')[0] }
+  }
+  const finish = async (state: string, cookie: string) => request(`/auth/github/callback?code=test-code&state=${state}`, cookie)
+  try {
+    assert.deepEqual(await (await request('/auth/providers')).json(), { github: true })
+    const register = await request('/auth/register', '', { method: 'POST', body: JSON.stringify({ username: 'maker', name: 'Local maker', password: 'test-password-twelve-characters' }) })
+    assert.equal(register.status, 201)
+    const localCookie = sessionCookie(register)
+    const localId = (await (await request('/session', localCookie)).json()).user.id as string
+
+    const invalid = await begin()
+    assert.equal((await finish('wrong-state', invalid.cookie)).status, 302)
+    assert.equal(calls, 0)
+    assert.equal((await finish(invalid.state, invalid.cookie)).status, 302)
+    assert.equal(calls, 2)
+
+    const fresh = await begin('/auth/github?next=https://attacker.test')
+    const loginResult = await finish(fresh.state, fresh.cookie)
+    assert.equal(loginResult.headers.get('location'), 'https://ui.test/workspace')
+    const githubCookie = sessionCookie(loginResult)
+    const githubUser = (await (await request('/session', githubCookie)).json()).user
+    assert.notEqual(githubUser.id, localId)
+    assert.notEqual(githubUser.username, 'maker')
+    assert.equal((await request('/auth/login', '', { method: 'POST', body: JSON.stringify({ username: githubUser.username, password: 'invalid-password' }) })).status, 401)
+    assert.equal((await request('/me/password', githubCookie, { method: 'POST', body: JSON.stringify({ current: 'x', password: 'test-password-twelve-characters' }) })).status, 403)
+    assert.equal((await finish(fresh.state, fresh.cookie)).headers.get('location'), 'https://ui.test/login?github=failed')
+    assert.equal(calls, 4)
+
+    const linkExisting = await begin('/auth/github?link=1', localCookie)
+    githubId = 67890
+    login = 'linked-creator'
+    const linkedResult = await finish(linkExisting.state, `${localCookie}; ${linkExisting.cookie}`)
+    assert.equal(linkedResult.headers.get('location'), 'https://ui.test/settings?github=connected')
+    assert.equal((await (await request('/me/auth', localCookie)).json()).github, true)
+    const reauth = await begin()
+    const reauthResult = await finish(reauth.state, reauth.cookie)
+    const reauthUser = (await (await request('/session', sessionCookie(reauthResult))).json()).user
+    assert.equal(reauthUser.id, localId)
+    assert.equal(reauthUser.username, 'maker')
+
+    const foreign = await begin('/auth/github?link=1', githubCookie)
+    const conflict = await finish(foreign.state, `${githubCookie}; ${foreign.cookie}`)
+    assert.equal(conflict.headers.get('location'), 'https://ui.test/settings?github=conflict')
+    assert.equal((await (await request('/me/auth', githubCookie)).json()).github, true)
+
+    const unauthorized = await begin('/auth/github?link=1', localCookie)
+    assert.equal((await finish(unauthorized.state, unauthorized.cookie)).headers.get('location'), 'https://ui.test/login?github=failed')
+    const beforeInvalid = calls
+    assert.equal((await finish('é'.repeat(43), unauthorized.cookie)).headers.get('location'), 'https://ui.test/login?github=failed')
+    const expired = await begin()
+    db.prepare('UPDATE oauth_flows SET expires=0 WHERE hash=?').run(createHash('sha256').update(expired.state).digest('hex'))
+    assert.equal((await finish(expired.state, expired.cookie)).headers.get('location'), 'https://ui.test/login?github=failed')
+    const denied = await begin()
+    assert.equal((await request(`/auth/github/callback?error=access_denied&state=${denied.state}`, denied.cookie)).headers.get('location'), 'https://ui.test/login?github=failed')
+    const control = await begin('/auth/github?next=/%00')
+    assert.equal((db.prepare('SELECT next FROM oauth_flows WHERE hash=?').get(createHash('sha256').update(control.state).digest('hex')) as { next: string }).next, '/workspace')
+    assert.equal(calls, beforeInvalid)
+    const disabled = createApp(db, { github: false })
+    assert.deepEqual(await (await disabled.request('http://localhost/api/auth/providers')).json(), { github: false })
+    assert.equal((await disabled.request('http://localhost/api/auth/github')).status, 503)
   } finally { db.close(); rmSync(dir, { recursive: true, force: true }) }
 })

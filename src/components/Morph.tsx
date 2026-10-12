@@ -18,7 +18,7 @@ export function MorphNavigation({ children }: { children: ReactNode }) {
       const link = (event.target as Element).closest('a')
       if (!link || link.target === '_blank' || link.hasAttribute('download') || link.getAttribute('href')?.startsWith('#')) return
       const url = new URL(link.href)
-      if (url.origin !== location.origin) return
+      if (url.origin !== location.origin || url.pathname.startsWith('/api/')) return
       event.preventDefault()
       const sequence = ++navigation.current
       const work = url.pathname.startsWith('/work/')
