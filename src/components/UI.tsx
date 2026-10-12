@@ -38,7 +38,7 @@ export function Header() {
   </>
 }
 export function Footer() {
-  return <footer className="site-footer"><div><Link to="/principles">Rules</Link><a href="https://github.com/XFlexDev/kreatix-ui" target="_blank" rel="noreferrer">Source</a></div><span className="footer-brand">kreatix ui</span></footer>
+  return <footer className="site-footer"><div><a href="https://github.com/XFlexDev/kreatix-ui" target="_blank" rel="noreferrer">Source</a></div><span className="footer-brand">kreatix ui</span></footer>
 }
 export function PageHeading({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return <div className="page-heading"><div><h1>{title}</h1>{description && <p>{description}</p>}</div>{action}</div>

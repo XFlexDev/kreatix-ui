@@ -16,6 +16,8 @@ type CreatorRow = { id: string; username: string; name: string; bio: string; web
 const scrypt = (password: string, salt: string, length: number, options: { N: number; r: number; p: number; maxmem: number }) => new Promise<Buffer>((resolve, reject) => scryptCallback(password, salt, length, options, (error, key) => error ? reject(error) : resolve(key)))
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex')
 const now = () => new Date().toISOString()
+const reservedUsernames = ['admin', 'api', 'moderation', 'kreatix', 'support', 'settings']
+const safeNext = (next: string | undefined) => next?.startsWith('/') && !next.startsWith('//') && !next.includes('\\') && ![...next].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ? next : '/workspace'
 const publicCreator = (r: CreatorRow): Creator => ({ id: r.id, username: r.username, name: r.name, bio: r.bio, website: r.website, curated: !!r.curated, joined: r.joined })
 function fail(status: 400 | 401 | 403 | 404 | 409 | 429 | 503, message: string): never { throw new HTTPException(status, { message }) }
 
@@ -31,11 +33,14 @@ async function verifyPassword(password: string, hashed: string) {
   return expected.length === key.length && timingSafeEqual(expected, key)
 }
 
-export function createApp(db: DB, options: { origin?: string; production?: boolean } = {}) {
+export function createApp(db: DB, options: { origin?: string; production?: boolean; github?: false | { clientId: string; clientSecret: string; fetch?: typeof fetch } } = {}) {
   const app = new Hono<Env>()
   const origin = options.origin ?? process.env.APP_ORIGIN ?? 'http://localhost:5173'
   const production = options.production ?? process.env.NODE_ENV === 'production'
   const cookieName = production ? '__Host-kreatix_ui' : 'kreatix_ui'
+  const flowCookie = production ? '__Host-kreatix_ui_oauth' : 'kreatix_ui_oauth'
+  const github = options.github === false ? undefined : options.github ?? (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET ? { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET } : undefined)
+  const redirectUri = `${origin}/api/auth/github/callback`
   const cache = new Map<string, string>()
   const documents = new Map<string, { html: string; userId: string; expires: number }>()
   let builds = 0
@@ -141,11 +146,96 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
   })
   app.get('/api/health', c => c.json({ ok: true }))
   app.get('/api/session', c => c.json({ user: c.get('user') }))
+  app.get('/api/auth/providers', c => c.json({ github: !!github }))
+  app.get('/api/auth/github', c => {
+    if (!github) fail(503, 'GitHub sign-in is not configured')
+    limit(`oauth-start:${c.get('ip')}`, 20, 900)
+    const userId = c.req.query('link') === '1' ? requireUser(c).id : null
+    const state = randomBytes(32).toString('base64url')
+    const verifier = randomBytes(32).toString('base64url')
+    db.prepare('DELETE FROM oauth_flows WHERE expires<?').run(Date.now())
+    db.prepare('INSERT INTO oauth_flows VALUES(?,?,?,?,?)').run(hashToken(state), verifier, userId ? '/settings' : safeNext(c.req.query('next')), userId, Date.now() + 600_000)
+    setCookie(c, flowCookie, state, { httpOnly: true, secure: production, sameSite: 'Lax', path: '/', maxAge: 600 })
+    const url = new URL('https://github.com/login/oauth/authorize')
+    url.searchParams.set('client_id', github.clientId)
+    url.searchParams.set('redirect_uri', redirectUri)
+    url.searchParams.set('scope', 'read:user')
+    url.searchParams.set('state', state)
+    url.searchParams.set('code_challenge', createHash('sha256').update(verifier).digest('base64url'))
+    url.searchParams.set('code_challenge_method', 'S256')
+    return c.redirect(url.toString())
+  })
+  app.get('/api/auth/github/callback', async c => {
+    limit(`oauth-callback:${c.get('ip')}`, 20, 900)
+    const state = c.req.query('state')
+    const cookie = getCookie(c, flowCookie)
+    deleteCookie(c, flowCookie, { path: '/', secure: production })
+    if (!github || !state || !cookie || !/^[A-Za-z0-9_-]{43}$/.test(state) || !/^[A-Za-z0-9_-]{43}$/.test(cookie) || !timingSafeEqual(Buffer.from(cookie), Buffer.from(state))) return c.redirect(`${origin}/login?github=failed`)
+    const flow = db.prepare('SELECT verifier,next,user_id,expires FROM oauth_flows WHERE hash=?').get(hashToken(state)) as { verifier: string; next: string; user_id: string | null; expires: number } | undefined
+    db.prepare('DELETE FROM oauth_flows WHERE hash=?').run(hashToken(state))
+    if (!flow || flow.expires < Date.now() || !c.req.query('code') || c.req.query('code')!.length > 2048) return c.redirect(`${origin}/login?github=failed`)
+    if (flow.user_id && c.get('user')?.id !== flow.user_id) return c.redirect(`${origin}/login?github=failed`)
+    try {
+      const response = await (github.fetch ?? fetch)('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ client_id: github.clientId, client_secret: github.clientSecret, code: c.req.query('code')!, redirect_uri: redirectUri, code_verifier: flow.verifier }),
+        signal: AbortSignal.timeout(10_000)
+      })
+      if (!response.ok) throw new Error('OAuth exchange failed')
+      const token = z.object({ access_token: z.string().min(1), token_type: z.literal('bearer') }).parse(await response.json()).access_token
+      const profileResponse = await (github.fetch ?? fetch)('https://api.github.com/user', {
+        headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' },
+        signal: AbortSignal.timeout(10_000)
+      })
+      if (!profileResponse.ok) throw new Error('GitHub profile request failed')
+      const profile = z.object({ id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), login: z.string().min(1).max(128), name: z.string().nullable().optional() }).parse(await profileResponse.json())
+      const githubId = String(profile.id)
+      const linked = db.prepare('SELECT user_id FROM github_identities WHERE github_id=?').get(githubId) as { user_id: string } | undefined
+      if (flow.user_id) {
+        if (linked && linked.user_id !== flow.user_id) return c.redirect(`${origin}/settings?github=conflict`)
+        if (!linked && db.prepare('SELECT 1 FROM github_identities WHERE user_id=?').get(flow.user_id)) return c.redirect(`${origin}/settings?github=conflict`)
+        db.prepare('INSERT INTO github_identities(github_id,user_id,login,created_at) VALUES(?,?,?,?) ON CONFLICT(github_id) DO UPDATE SET login=excluded.login').run(githubId, flow.user_id, profile.login, now())
+        return c.redirect(`${origin}/settings?github=connected`)
+      }
+      let userId = linked?.user_id
+      if (!userId) {
+        const base = profile.login.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 24)
+        let username = base.length >= 3 ? base : `gh_${githubId}`
+        let suffix = 0
+        while (reservedUsernames.includes(username) || db.prepare('SELECT 1 FROM creators WHERE username=?').get(username) || db.prepare('SELECT 1 FROM users WHERE username=?').get(username)) {
+          const tail = `_${githubId}${suffix ? `_${suffix}` : ''}`
+          username = `${(base.length >= 3 ? base : 'gh').slice(0, 24 - tail.length)}${tail}`
+          suffix++
+        }
+        userId = randomUUID()
+        const name = profile.name?.trim().slice(0, 60) || profile.login.slice(0, 60)
+        db.exec('BEGIN IMMEDIATE')
+        try {
+          db.prepare('INSERT INTO users(id,username,name,password,created_at) VALUES(?,?,?,?,?)').run(userId, username, name, '!github', now())
+          db.prepare('INSERT INTO creators(id,user_id,username,name,joined) VALUES(?,?,?,?,?)').run(userId, userId, username, name, now())
+          db.prepare('INSERT INTO github_identities VALUES(?,?,?,?)').run(githubId, userId, profile.login, now())
+          db.exec('COMMIT')
+        } catch (error) { db.exec('ROLLBACK'); throw error }
+      } else db.prepare('UPDATE github_identities SET login=? WHERE github_id=?').run(profile.login, githubId)
+      const old = getCookie(c, cookieName)
+      if (old) db.prepare('DELETE FROM sessions WHERE hash=?').run(hashToken(old))
+      session(c, userId)
+      return c.redirect(`${origin}${safeNext(flow.next)}`)
+    } catch {
+      return c.redirect(`${origin}/login?github=failed`)
+    }
+  })
+  app.get('/api/me/auth', c => {
+    const user = requireUser(c)
+    const row = db.prepare('SELECT password FROM users WHERE id=?').get(user.id) as { password: string }
+    return c.json({ github: !!db.prepare('SELECT 1 FROM github_identities WHERE user_id=?').get(user.id), hasPassword: row.password !== '!github', githubAvailable: !!github })
+  })
   app.post('/api/auth/register', async c => {
     limit(`auth:${c.get('ip')}`, 8, 900)
     const data = z.object({ username: z.string().trim().regex(/^[a-zA-Z0-9_]{3,24}$/, 'Use 3 to 24 letters, numbers, or underscores'), name: z.string().trim().min(1).max(60), password: z.string().min(12).max(128) }).strict().parse(await c.req.json())
     const username = data.username.toLowerCase()
-    if (['admin', 'api', 'moderation', 'kreatix', 'support', 'settings'].includes(username) || db.prepare('SELECT 1 FROM creators WHERE username=?').get(username)) fail(409, 'That username is already taken')
+    if (reservedUsernames.includes(username) || db.prepare('SELECT 1 FROM creators WHERE username=?').get(username)) fail(409, 'That username is already taken')
     const id = randomUUID()
     const password = await hashPassword(data.password)
     try {
@@ -162,7 +252,7 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
     const data = z.object({ username: z.string().trim().min(1).max(24), password: z.string().min(1).max(128) }).strict().parse(await c.req.json())
     const user = db.prepare('SELECT * FROM users WHERE username=?').get(data.username) as (User & { password: string }) | undefined
     const dummy = `${'0'.repeat(32)}:${'0'.repeat(128)}`
-    const matches = await verifyPassword(data.password, user?.password ?? dummy)
+    const matches = await verifyPassword(data.password, user?.password === '!github' ? dummy : user?.password ?? dummy)
     if (!user || !matches) fail(401, 'Incorrect username or password')
     const old = getCookie(c, cookieName)
     if (old) db.prepare('DELETE FROM sessions WHERE hash=?').run(hashToken(old))
@@ -344,6 +434,7 @@ export function createApp(db: DB, options: { origin?: string; production?: boole
     limit(`password:${user.id}`, 5, 900)
     const data = z.object({ current: z.string().min(1).max(128), password: z.string().min(12).max(128) }).strict().parse(await c.req.json())
     const row = db.prepare('SELECT password FROM users WHERE id=?').get(user.id) as { password: string }
+    if (row.password === '!github') fail(403, 'This account uses GitHub sign-in')
     if (!await verifyPassword(data.current, row.password)) fail(401, 'Current password is incorrect')
     db.prepare('UPDATE users SET password=? WHERE id=?').run(await hashPassword(data.password), user.id)
     db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id)

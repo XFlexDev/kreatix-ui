@@ -61,6 +61,7 @@ Restrained control and preview radii. Change geometry only when state or hierarc
 ## Components
 
 - Navigation and tabs: shared active indicators follow related selections.
+- Authentication: sign-in and registration share a moving active marker. The name field expands only when registration needs it; passwords are never carried between modes.
 - Gallery: preserve item positions as filtering changes results; no repeated entrance choreography.
 - Work navigation: only the stage surface morphs from card to detail. Its text crossfades at natural size, never stretches with the surface. Unrelated route content changes without blanket blur, scale, or slide effects.
 - Preview: retain the still stage while compiling and crossfade into the loaded sandbox; explicit start/stop and one active gallery iframe. Maker attribution and source remain outside untrusted documents.
