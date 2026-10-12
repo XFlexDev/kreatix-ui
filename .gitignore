@@ -1,0 +1,10 @@
+node_modules/
+dist/
+build/
+data/
+.env
+.env.*
+!.env.example
+evidence/
+.impeccable/review/
+.DS_Store
