@@ -32,7 +32,10 @@ export function MorphNavigation({ children }: { children: ReactNode }) {
         } catch { /* The detail route presents the request error. */ }
       }
       if (sequence !== navigation.current) return
-      morph(() => navigate(url.pathname + url.search + url.hash), work || returning)
+      morph(() => {
+        navigate(url.pathname + url.search + url.hash)
+        if (!url.hash) window.scrollTo({ top: 0, behavior: 'instant' })
+      }, work || returning)
     }
     document.addEventListener('click', handle, { capture: true })
     return () => document.removeEventListener('click', handle, { capture: true })
